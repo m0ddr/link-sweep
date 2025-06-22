@@ -58,7 +58,7 @@ Issues = "https://github.com/m0ddr/link-sweep/issues"
 Documentation = "https://github.com/m0ddr/link-sweep#readme"
 
 [project.scripts]
-link-sweep = "cli:main"
+link-sweep = "link_sweep.cli:main"
 
 [tool.ruff]
 target-version = "py38" 
