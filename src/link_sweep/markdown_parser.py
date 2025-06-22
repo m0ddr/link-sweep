@@ -1,9 +1,11 @@
+"""Markdown file parsing utilities for link extraction and replacement."""
+
 from pathlib import Path
 import re
 
 
 def get_files(directory):
-    # Simple recursive search for .md files in target directory
+    """Simple recursive search for .md files in target directory."""
     p = Path(directory)
     md_files = []
     for file in p.rglob("*.md"):
@@ -14,7 +16,7 @@ def get_files(directory):
 
 
 def get_md_links(md_file_path: list):
-    # Creates two groups out of markdown links
+    """Creates two groups out of markdown links."""
     pattern = r'\[([^\]]+)\]\((https?:\/\/[^\s\)"]+)\)'
     links = []
 
@@ -33,6 +35,7 @@ def get_md_links(md_file_path: list):
 
 
 def replace_link(md_file_path, bad_links):
+    """Replace bad links with their text content in markdown files."""
     try:
         with open(md_file_path, "r", encoding="utf-8") as f:
             content = f.read()

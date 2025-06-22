@@ -67,9 +67,9 @@ MIT License - see LICENSE file for details.
 
 ## Changelog
 
-### v0.1.0
-- Initial release
+### v0.1.1
 - Basic link checking functionality
 - Dead link removal option
 - CLI interface with Click
-- GitHub Actions support
+- Concurrency for improved perforamance
+- Link timeouts

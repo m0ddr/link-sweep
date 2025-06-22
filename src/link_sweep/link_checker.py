@@ -1,12 +1,21 @@
-import httpx
-import markdown_parser
+"""Asynchronous link checker module for markdown files."""
+
+import asyncio
 import logging
+
+import httpx
+
+from . import markdown_parser
 
 
 class LinkChecker:
-    def __init__(self, directory):
+    """Asynchronous link checker for markdown files."""
+
+    def __init__(self, directory, timeout=10.0):
+        """Initialize LinkChecker with directory path and timeout settings."""
         self.logger = logging.getLogger(__name__)
         self.logger.info(f"Initializing LinkChecker for {directory}")
+        self.timeout = timeout
 
         self.pages = markdown_parser.get_files(directory)  # content/
         self.links_data = markdown_parser.get_md_links(self.pages)
@@ -17,32 +26,59 @@ class LinkChecker:
         self.links = [link["url"] for link in self.links_data]
 
         self.bad_links = []
+        self.timed_out_links = []
         self._checked = False
 
-    def check_links(self):
-        self.logger.info(f"Starting link check for {len(self.links)} links")
+    async def _check_single_link(self, session, link):
+        """Check a single link asynchronously."""
+        try:
+            response = await session.get(link, timeout=self.timeout)
+            if response.status_code >= 400:
+                self.logger.warning(
+                    f"Dead link found: {link} (status: {response.status_code})"
+                )
+                return link, "dead"
+            else:
+                self.logger.debug(f"Link OK: {link} (status: {response.status_code})")
+                return link, "ok"
+        except (httpx.TimeoutException, asyncio.TimeoutError):
+            self.logger.warning(f"Link timed out: {link}")
+            return link, "timeout"
+        except Exception as e:
+            self.logger.error(f"Error checking {link}: {e}")
+            return link, "error"
 
-        for i, link in enumerate(self.links):
-            self.logger.debug(f"Checking link {i + 1}/{len(self.links)}: {link}")
-            try:
-                response = httpx.get(link, timeout=10.0)
-                if response.status_code >= 400:
-                    self.logger.warning(
-                        f"Dead link found: {link} (status: {response.status_code})"
-                    )
-                    self.bad_links.append(link)
+    async def check_links(self):
+        """Check all links asynchronously."""
+        self.logger.info(f"Starting async link check for {len(self.links)} links")
+
+        async with httpx.AsyncClient() as session:
+            # Create tasks for all links
+            tasks = [self._check_single_link(session, link) for link in self.links]
+
+            # Execute all tasks concurrently
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+
+            # Process results
+            for i, result in enumerate(results):
+                if isinstance(result, BaseException):
+                    self.logger.error(f"Unexpected error for {self.links[i]}: {result}")
+                    self.bad_links.append(self.links[i])
                 else:
-                    self.logger.debug(
-                        f"Link OK: {link} (status: {response.status_code})"
-                    )
-            except Exception as e:
-                self.logger.error(f"Error checking {link}: {e}")
+                    link, status = result
+                    if status in ["dead", "error"]:
+                        self.bad_links.append(link)
+                    elif status == "timeout":
+                        self.bad_links.append(link)
+                        self.timed_out_links.append(link)
 
         self._checked = True
 
     def remove_bad_links(self):
+        """Remove bad links from markdown files by replacing them with their text content."""  # noqa: E501
         if not self._checked:
-            self.check_links()
+            # Run the async method synchronously if not already checked
+            asyncio.run(self.check_links())
 
         if not self.bad_links:
             self.logger.info("No bad links to remove")
